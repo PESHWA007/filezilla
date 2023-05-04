@@ -1,0 +1,198 @@
+function Update-FileZilla {
+    if (Get-Process FileZilla -ErrorAction SilentlyContinue) {
+        Stop-Process -Name FileZilla -Force
+    }
+
+    $url = "https://filezilla-project.org/download.php?type=client"
+    $latestVersion = Invoke-WebRequest -Uri $url -UseBasicParsing |
+                     Select-String -Pattern 'FileZilla [0-9]+\.[0-9]+\.[0-9]+' |
+                     Select-Object -First 1 |
+                     ForEach-Object { $_.Matches[0].Value -replace 'FileZilla ' }
+
+    $installedVersion = (Get-ItemProperty "HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\FileZilla Client").DisplayVersion
+    if ($installedVersion -eq $latestVersion) {
+        Write-Host "FileZilla is already up to date."
+        return
+    }
+    
+    $url = "https://dl1.cdn.filezilla-project.org/client/FileZilla_$($latestVersion)_win64_sponsored-setup.exe"
+    $output = "FileZilla_$($latestVersion)_win64_sponsored-setup.exe"
+
+    Invoke-WebRequest -Uri $url -OutFile $output
+
+    $uninstallString = (Get-ItemProperty "HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\FileZilla Client").UninstallString
+    Start-Process cmd.exe -ArgumentList "/c", "$uninstallString /S" -Wait
+
+    Start-Process $output -ArgumentList "/S" -Wait
+
+    # Remove the downloaded setup file
+    Remove-Item $output
+}
+
+
+function Update-CloudberryExplorer {
+    
+    if (!(Get-ItemProperty "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\CloudBerry Explorer")) {
+        Write-Host "Cloudberry Explorer is not installed."
+        return
+    }
+    
+    $url = "https://www.cloudberrylab.com/download-explorer.aspx"
+    $webRequest = Invoke-WebRequest -Uri $url
+    $downloadLink = $webRequest.Links | Where-Object { $_.href -like "*CloudBerryExplorerSetup.*.exe*" } | Select-Object -First 1
+    $latestVersion = $downloadLink.href.Split("/")[-1] -replace ".*CloudBerryExplorerSetup.(.*).exe", '$1'
+    $currentVersion = (Get-ItemProperty "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\CloudBerry Explorer") | Select-Object -ExpandProperty DisplayVersion
+
+    if ($latestVersion -eq $currentVersion) {
+        Write-Host "Cloudberry Explorer is already up to date."
+        return
+    }
+
+    $url = "https://downloads.cloudberrylab.com/CloudBerryExplorer-$latestVersion.exe"
+    $output = "CloudBerryExplorer-$latestVersion.exe"
+    Invoke-WebRequest -Uri $url -OutFile $output
+    Start-Process $output -ArgumentList "/S" -Wait
+    Remove-Item $output
+    $newVersion = (Get-ItemProperty "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\CloudBerry Explorer") | Select-Object -ExpandProperty DisplayVersion
+
+    if ($newVersion -ne $currentVersion) {
+        Write-Host "Cloudberry Explorer has been updated to version $newVersion."
+    } else {
+        Write-Host "Cloudberry Explorer update failed."
+    }
+}
+
+
+function Update-7Zip {
+    $url = "https://www.7-zip.org/download.html"
+
+    $webRequest = Invoke-WebRequest -Uri $url
+    $downloadLink = $webRequest.Links | Where-Object { $_.href -like "*7z*" } | Select-Object -First 1
+    $latestVersion = $downloadLink.href.Split("/")[-1]
+
+    $currentVersion = (Get-ItemProperty "HKLM:\SOFTWARE\7-Zip").MsiPackageVersion
+
+    if ($latestVersion -eq $currentVersion) {
+        Write-Host "7-Zip is already up to date."
+        return
+    }
+
+    $url = "https://www.7-zip.org/a/$latestVersion"
+
+    $output = "7z$latestVersion.exe"
+    Invoke-WebRequest -Uri $url -OutFile $output
+
+    $uninstallString = (Get-ItemProperty "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\7-Zip").UninstallString
+    Start-Process cmd.exe -ArgumentList "/c", "$uninstallString /quiet" -Wait
+
+    Start-Process $output -ArgumentList "/S" -Wait
+
+    Remove-Item $output
+    
+    $newVersion = (Get-ItemProperty "HKLM:\SOFTWARE\7-Zip").MsiPackageVersion
+
+    if ($newVersion -ne $currentVersion) {
+        Write-Host "7-Zip has been updated to version $newVersion."
+    } else {
+        Write-Host "7-Zip update failed."
+    }
+}
+
+function Update-NotepadPlusPlus {
+    $url = "https://notepad-plus-plus.org/downloads/"
+    $webRequest = Invoke-WebRequest -Uri $url
+    $downloadLink = $webRequest.Links | Where-Object { $_.href -like "*npp.*.Installer.exe*" } | Select-Object -First 1
+    $latestVersion = $downloadLink.href.Split("/")[-1] -replace "npp\.(.*)\.Installer\.exe", '$1'
+    $currentVersion = (Get-ItemProperty "HKLM:\SOFTWARE\WOW6432Node\Notepad++").DisplayVersion
+
+    if ($latestVersion -eq $currentVersion) {
+        Write-Host "Notepad++ is already up to date."
+        return
+    }
+
+    $url = "https://github.com/notepad-plus-plus/notepad-plus-plus/releases/download/v$latestVersion/npp.$latestVersion.Installer.exe"
+    $output = "npp.$latestVersion.Installer.exe"
+    Invoke-WebRequest -Uri $url -OutFile $output
+    $uninstallString = (Get-ItemProperty "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\{B298D29A-A6ED-11DE-BA8C-A68E55D89593}_is1").UninstallString
+    Start-Process cmd.exe -ArgumentList "/c", "$uninstallString /S" -Wait
+    Start-Process $output -ArgumentList "/S" -Wait
+    Remove-Item $output
+    $newVersion = (Get-ItemProperty "HKLM:\SOFTWARE\WOW6432Node\Notepad++").DisplayVersion
+
+    if ($newVersion -ne $currentVersion) {
+        Write-Host "Notepad++ has been updated to version $newVersion."
+    } else {
+        Write-Host "Notepad++ update failed."
+    }
+}
+
+function Update-RStudio {
+    $url = "https://rstudio.com/products/rstudio/download/#download"
+    $webRequest = Invoke-WebRequest -Uri $url
+    $downloadLink = $webRequest.Links | Where-Object { $_.href -like "*RStudio.*.exe*" } | Select-Object -First 1
+    $latestVersion = $downloadLink.href.Split("/")[-1] -replace "RStudio-(.*)-.*\.exe", '$1'
+    $currentVersion = (Get-ItemProperty "HKLM:\SOFTWARE\RStudio").DisplayVersion
+
+    if ($latestVersion -eq $currentVersion) {
+        Write-Host "RStudio is already up to date."
+        return
+    }
+
+    $url = "https://download1.rstudio.org/desktop/windows/RStudio-$latestVersion.exe"
+    $output = "RStudio-$latestVersion.exe"
+    Invoke-WebRequest -Uri $url -OutFile $output
+    $uninstallString = (Get-ItemProperty "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\RStudio").UninstallString
+    Start-Process cmd.exe -ArgumentList "/c", "$uninstallString /S" -Wait
+    Start-Process $output -ArgumentList "/S" -Wait
+    Remove-Item $output
+    $newVersion = (Get-ItemProperty "HKLM:\SOFTWARE\RStudio").DisplayVersion
+
+    if ($newVersion -ne $currentVersion) {
+        Write-Host "RStudio has been updated to version $newVersion."
+    } else {
+        Write-Host "RStudio update failed."
+    }
+}
+
+function Update-MySQLWorkbench {
+    $url = "https://dev.mysql.com/downloads/workbench/"
+    $webRequest = Invoke-WebRequest -Uri $url
+    $downloadLink = $webRequest.Links | Where-Object { $_.href -like "*mysql-workbench-community-*.msi*" } | Select-Object -First 1
+    $latestVersion = $downloadLink.href.Split("/")[-1] -replace ".*-(.*)-.*\.msi", '$1'
+    $currentVersion = (Get-ItemProperty "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\MySQL Workbench {64-bit}").DisplayVersion
+
+    if ($latestVersion -eq $currentVersion) {
+        Write-Host "MySQL Workbench is already up to date."
+        return
+    }
+
+    $url = "https://cdn.mysql.com//Downloads/MySQLGUITools/mysql-workbench-community-$latestVersion-winx64.msi"
+    $output = "mysql-workbench-community-$latestVersion-winx64.msi"
+    Invoke-WebRequest -Uri $url -OutFile $output
+    $uninstallString = (Get-ItemProperty "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\MySQL Workbench {64-bit}").UninstallString
+    Start-Process msiexec.exe -ArgumentList "/x", "`"$uninstallString`"", "/quiet" -Wait
+    Start-Process msiexec.exe -ArgumentList "/i", "`"$output`"", "/quiet" -Wait
+    Remove-Item $output
+    $newVersion = (Get-ItemProperty "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\MySQL Workbench {64-bit}").DisplayVersion
+
+    if ($newVersion -ne $currentVersion) {
+        Write-Host "MySQL Workbench has been updated to version $newVersion."
+    } else {
+        Write-Host "MySQL Workbench update failed."
+    }
+}
+
+function Update-Tableau {
+    $tableauUrl = "https://www.tableau.com/support/releases/"
+    $currentVersion = (Get-ItemProperty "HKLM:\SOFTWARE\Tableau\Tableau <version>")["Version"]
+    $currentVersionUrl = $tableauUrl + $currentVersion
+    $currentVersionPage = Invoke-WebRequest -Uri $currentVersionUrl
+    $latestVersionUrl = $currentVersionPage.Links | Where-Object { $_.InnerText -like "Tableau Desktop * for * (64 bit)" } | Select-Object -First 1 -ExpandProperty href
+    $latestVersion = $latestVersionUrl -replace ".*TableauDesktop-(.*).exe",'$1'
+    $latestVersionDownloadUrl = "https://www.tableau.com/downloads/desktop/windows?version=$latestVersion"
+    $latestVersionDownloadPath = Join-Path -Path $downloadPath -ChildPath "TableauDesktop-$latestVersion.exe"
+    Invoke-WebRequest -Uri $latestVersionDownloadUrl -OutFile $latestVersionDownloadPath
+    Start-Process -FilePath $latestVersionDownloadPath -ArgumentList "/S" -Wait
+    Remove-Item $latestVersionDownloadPath
+}
+
