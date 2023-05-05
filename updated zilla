@@ -1,0 +1,23 @@
+function Update-NotepadPlusPlus {
+    $currentVersion = (Get-ItemProperty 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\Notepad++').DisplayVersion
+    $newVersion = Invoke-WebRequest -Uri "https://api.github.com/repos/notepad-plus-plus/notepad-plus-plus/releases/latest" | ConvertFrom-Json | Select-Object -ExpandProperty tag_name
+
+    if ($currentVersion -eq $newVersion) {
+        Write-Output "Notepad++ is already up-to-date. The current version is $currentVersion."
+        Exit
+    }
+
+    $url = "https://github.com/notepad-plus-plus/notepad-plus-plus/releases/latest/download/npp.$newVersion.Installer.exe"
+    $filename = "npp.$newVersion.Installer.exe"
+    $destination = "$env:USERPROFILE\Downloads\$filename"
+
+    Invoke-WebRequest -Uri $url -OutFile $destination
+
+    Start-Process $destination -ArgumentList "/S" -Wait
+
+    if (Get-Process "notepad++" -ErrorAction SilentlyContinue) {
+        Write-Output "Notepad++ is currently running. Please save your work and restart the application."
+    } else {
+        Write-Output "Notepad++ has been updated to version $newVersion."
+    }
+}
